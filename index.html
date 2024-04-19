@@ -1,0 +1,528 @@
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        <script src="https://code.jquery.com/jquery-3.7.1.min.js" integrity="sha256-/JqT3SQfawRcv/BIHPThkBvs0OEvtFFmqPF/lYI/Cxo=" crossorigin="anonymous"></script>
+        <script>
+            jQuery(document).ready(function($) {
+                let dc;
+
+                class DebtCalc {
+                    constructor() {
+                        dc = this;
+
+                        let debts                   = [];
+                        let resp                    = '';
+                        let completion_date         = '';
+                        let total_balance           = 0.00;
+                        let total_min_payment       = 0.00;
+                        let monthly_payment         = 0.00;
+                        let extra_payment           = 0.00;
+                        let total_payment           = 0.00;
+                        let summary_total_payment   = 0.00;
+                        let summary_total_balance   = 0.00;
+                        let initial_minimum_paymet  = 0.00;
+                        
+
+                        $(document).on('click', '#add-debt',     this.addDebt    );
+                        $(document).on('click', '#calculate',    this.calculate  );
+                        $(document).on('click', '#demo',         this.demo       );
+                        $(document).on('click', '#save',         this.save       );
+                        $(document).on('click', '#load',         this.load       );
+                        $(document).on('click', '#restore',      this.restore    );
+                        $(document).on('click', '.remove-row',   this.removeRow  );
+                        $(document).on('click', '#saveBrowser',  this.saveBrowser);
+                        $(document).on('click', '#clearBrowser', this.clearBrowser);
+
+                        if (localStorage.getItem('debt-calc')) {
+                            let data = JSON.parse(localStorage.getItem('debt-calc'));
+                            $('#monthly-payment').val(data.monthly_payment);
+
+                            $('#debts').html('');
+
+                            data.debts.forEach(function(debt) {
+                                let row = $('#debt-row').clone();
+                                row.find('.name').attr('value', debt.name);
+                                row.find('.balance').attr('value', debt.balance);
+                                row.find('.apr').attr('value', debt.apr);
+                                row.find('.min_payment').attr('value', debt.min_payment);
+                                $('#debts').append(row.html());
+                            });
+
+                            dc.calculate();
+                        }
+                    }
+
+                    saveBrowser() {
+                        dc.setDebts();
+                        let save = {
+                            debts: dc.debts,
+                            monthly_payment: dc.monthly_payment
+                        };
+
+                        localStorage.setItem('debt-calc', JSON.stringify(save));
+
+                        alert('Saved to browser');
+                    }
+
+                    clearBrowser() {
+                        localStorage.removeItem('debt-calc');
+                        alert('Cleared save from browser');
+                        location.reload();
+                    }
+
+                    restore() {
+                        let data = JSON.parse($('#load-data').val());
+
+                        $('#monthly-payment').val(data.monthly_payment);
+
+                        $('#debts').html('');
+
+                        data.debts.forEach(function(debt) {
+                            let row = $('#debt-row').clone();
+                            row.find('.name').attr('value', debt.name);
+                            row.find('.balance').attr('value', debt.balance);
+                            row.find('.apr').attr('value', debt.apr);
+                            row.find('.min_payment').attr('value', debt.min_payment);
+                            $('#debts').append(row.html());
+                        });
+
+                        dc.calculate();
+                    }
+
+                    save() {
+                        dc.setDebts();
+                        let save = {
+                            debts: dc.debts,
+                            monthly_payment: dc.monthly_payment
+                        };
+
+                        dc.resp = JSON.stringify(save);
+
+                        $('#results').html('<textarea>'+dc.resp+'</textarea>');
+                    }
+
+                    load() {
+                        $('#results').html('<textarea id="load-data"></textarea><button id="restore">Restore</button>');
+                    }
+
+                    setDebts() {
+                        dc.resp = '';
+
+                        dc.summary_total_balance = 0.00;
+                        dc.summary_total_payment = 0.00;
+
+                        dc.debts = [];
+
+                        // Store debt data
+                        $('.debt').each(function() {
+                            let det = {};
+                            det.name = $(this).find('.name').val();
+                            det.balance = parseFloat($(this).find('.balance').val());
+                            det.apr = parseFloat($(this).find('.apr').val());
+                            det.min_payment = parseFloat($(this).find('.min_payment').val());
+                            if (det.balance > 0.0) {
+                                dc.debts.push(det);
+                            }
+                            dc.summary_total_balance += det.balance;
+                        });
+
+                        // Store the monthly payment
+                        dc.monthly_payment = parseFloat($('#monthly-payment').val());
+
+                        // Set starting point
+                        dc.total_balance = 0.00;
+                        dc.total_min_payment = 0.00;
+                        dc.debts.forEach(function(debt) {
+                            dc.total_balance += debt.balance;
+                            dc.total_min_payment += debt.min_payment;
+                        });
+
+                        if (dc.total_min_payment > dc.monthly_payment) {
+                            alert('Your monthly payment does not cover the minimum payment, please seek help.\n\nWe will calculate your results using the minimum payment.');
+                            dc.monthly_payment = dc.total_min_payment;
+                        }
+
+                        dc.initial_minimum_payment = dc.total_min_payment;
+                        
+                        // Order the debts by the highest APR and then by the lowest balance
+                        dc.debts.sort(function(a, b) {
+                            if (a.apr > b.apr) {
+                                return -1;
+                            } else if (a.apr < b.apr) {
+                                return 1;
+                            } else {
+                                if (a.balance < b.balance) {
+                                    return -1;
+                                } else if (a.balance > b.balance) {
+                                    return 1;
+                                } else {
+                                    return 0;
+                                }
+                            }
+                        });
+
+                    }
+
+                    demo() {
+                        $('#debts').html('');
+                        let debt = $('#debt-row').clone();
+                        debt.find('.name').attr('value', 'Credit Card 1');
+                        debt.find('.balance').attr('value', '1000.00');
+                        debt.find('.apr').attr('value', '12.9');
+                        debt.find('.min_payment').attr('value', '25.00');
+                        $('#debts').append(debt.html());
+                        debt = $('#debt-row').clone();
+                        debt.find('.name').attr('value', 'Credit Card 2');
+                        debt.find('.balance').attr('value', '2000.00');
+                        debt.find('.apr').attr('value', '18.9');
+                        debt.find('.min_payment').attr('value', '50.00');
+                        $('#debts').append(debt.html());
+                        $('#monthly-payment').val('100.00');
+                    }
+
+                    addDebt() {
+                        $('#debts').append($('#debt-row').clone().html());
+                    }
+
+                    removeRow() {
+                        if (confirm('Are you sure you want to remove this debt?')) {
+                            $(this).closest('.debt').remove();
+                        }
+                    }
+
+                    calculate() {
+                        dc.setDebts();
+
+                        dc.renderResults();
+
+                        $('html, body').animate({
+                            scrollTop: $('#results').offset().top - 60
+                        }, 300);
+                    }
+
+                    renderResults() {
+                        dc.resp = '<h3>Suggested payments</h3>';
+                        dc.resp += '<div class="table-container">';
+                            dc.resp += '<table cellspacing="0">';
+                                dc.resp += '<thead>';
+                                    dc.resp += '<tr>';
+                                        dc.resp += '<td></td>';
+                                        dc.debts.forEach(function(debt) {
+                                            dc.resp += '<th colspan="2" scope="col">' + debt.name + '</th>';
+                                        });
+                                        dc.resp += '<th scope="col" colspan="2">Summary</th>';
+                                    dc.resp += '</tr>';
+                                    dc.resp += '<tr>';
+                                        dc.resp += '<th scope="col">Month</th>';
+                                        dc.debts.forEach(function(debt) {
+                                            dc.resp += '<th scope="col">Payment</th>';
+                                            dc.resp += '<th scope="col">Balance</th>';
+                                        });
+                                        dc.resp += '<th scope="col">Payment</th>';
+                                        dc.resp += '<th scope="col">Balance</th>';
+                                    dc.resp += '</tr>';
+                                dc.resp += '</thead>';
+                                dc.resp += '<tbody>';
+                                    dc.renderBody();
+                                dc.resp += '</tbody>';
+                            dc.resp += '</table>';
+                        dc.resp += '</div>';
+
+                        let summary = '<h3>Summary</h3>';
+                        summary += '<p>';
+                            summary += '<span class="label">Total balance:</span> &pound;' + dc.summary_total_balance.toFixed(2) + '<br />';
+                            summary += '<span class="label">Total payment:</span> &pound;' + dc.summary_total_payment.toFixed(2) + '<br />';
+                            summary += '<span class="label">Total interest:</span> &pound;' + (dc.summary_total_payment - dc.summary_total_balance).toFixed(2) + '<br />';
+                            summary += '<span class="label">Minimum payment:</span> &pound;' + dc.initial_minimum_payment.toFixed(2) + '<br />';
+                            summary += '<span class="label">Monthly payment:</span> &pound;' + dc.monthly_payment.toFixed(2) + '<br />';
+                            summary += '<span class="label">Completion date:</span> ' + dc.completion_date + '<br />';
+                        summary += '</p>';
+
+                        dc.resp = summary + dc.resp;
+
+                        $('#results').html(dc.resp);
+                    }
+
+                    setCurrentPayment() {
+                        dc.calcMinPayment();
+                        dc.extra_payment = dc.monthly_payment - dc.total_min_payment;
+                        dc.total_payment = 0.00;
+
+                        // foreach debts as debt, append this months payment
+                        dc.debts.forEach(function(debt) {
+                            let payment = debt.min_payment;
+
+                            if (debt.min_payment + dc.extra_payment > debt.balance) {
+                                debt.payment = debt.balance;
+                                dc.extra_payment -= debt.balance - debt.min_payment;
+                            } else {
+                                debt.payment = debt.min_payment + dc.extra_payment;
+                                dc.extra_payment = 0.00;
+                            }
+
+                            dc.total_payment += debt.payment;
+
+                            dc.summary_total_payment += debt.payment;
+
+                            debt.balance -= debt.payment;
+                        });
+                    }
+
+                    updateInterest() {
+                        dc.total_balance = 0.00;
+                        dc.debts.forEach(function(debt) {
+                            if (debt.apr > 0.00 && debt.balance > 0.00) {
+                                let interest = debt.balance * (parseFloat(debt.apr) / 12.0 / 100.0);
+                                console.log('Balance: ' + debt.balance  + ' Interest: ' + interest);
+                                debt.balance += interest;
+                            }
+                            dc.total_balance += debt.balance;
+                        });
+                    }
+
+                    calcMinPayment() {
+                        dc.total_min_payment = 0.00;
+                        dc.debts.forEach(function(debt) {
+                            if (debt.min_payment > debt.balance) {
+                                debt.min_payment = debt.balance;
+                            }
+                            dc.total_min_payment += debt.min_payment;
+                        });
+                    }
+
+                    renderBody() {
+                        let i = 0;
+                        let month = 1;
+                        while (dc.total_balance > 0) {
+                            dc.setCurrentPayment();
+                            dc.resp += '<tr>';
+                                let dt = new Date();
+                                dt.setMonth(dt.getMonth() + month);
+                                dc.resp += '<td><strong>' + dt.toLocaleString('default', { month: 'long' })+' '+dt.getFullYear() + '</strong></td>';
+
+                                dc.debts.forEach(function(debt) {
+                                    dc.resp += '<td style="text-align: right;">' + (debt.payment > 0.00 ? '&pound;' + debt.payment.toFixed(2) : '') + '</td>';
+                                    dc.resp += '<td style="text-align: right;">' + (debt.balance > 0.00 ? '&pound;' + debt.balance.toFixed(2) : '') + '</td>';
+                                });
+
+                                dc.resp += '<td style="text-align: right;">&pound;' + dc.total_payment.toFixed(2) + '</td>';
+                                dc.resp += '<td style="text-align: right;">&pound;' + dc.total_balance.toFixed(2) + '</td>';
+                            dc.resp += '</tr>';
+
+                            dc.resp += '<tr style="background: #ccc;">';
+                                dc.resp += '<td><em>Interest</em></td>';
+                                dc.debts.forEach(function(debt) {
+                                    dc.resp += '<td colspan="2" style="text-align: right;"><em>+ &pound;' + (debt.balance * (debt.apr / 12.0 / 100.0)).toFixed(2) + '</em></td>';
+                                });
+                                dc.resp += '<td></td>';
+                                dc.resp += '<td></td>';
+                            dc.resp += '</tr>';
+
+                            dc.updateInterest();
+
+                            month++;
+                            i++;
+
+                            if (i > 2400) { // 200 years
+                                console.error('Too many iterations, breaking loop.');
+                                break;
+                            }
+                        }
+
+                        let dt = new Date();
+                        dt.setMonth(dt.getMonth() + (month - 1));
+                        dc.completion_date = dt.toLocaleString('default', { month: 'long' })+' '+dt.getFullYear();
+                    }
+                }
+
+                new DebtCalc();
+
+            });
+        </script>
+        <style>
+            body 
+                { font-family: Arial, sans-serif; margin: 0; padding: 0 20px 20px; }
+            h1 
+                { text-align: center; }
+            #debt-row 
+                { display: none; }
+            .debt 
+                { display: flex; flex-wrap: wrap; gap: 10px; padding-bottom: 10px; }
+            .debt button
+                { width: 100%; }
+            .debt div 
+                { margin: 5px; flex-basis: 10%; text-align: center; flex-grow: 1; min-width: 175px; }
+            .debt input
+                { width: 100%; box-sizing: border-box; }
+            .debt div:has(button) 
+                { flex-basis: 10%; align-content: end; }
+            label
+                { display: block; }
+            td, th 
+                { padding: 5px; }
+            div.debt:nth-of-type(even) 
+                { background: #ddd; }
+            button 
+                { padding: 10px 20px; min-height: 44px; background: #000; color: #fff; border: none; cursor: pointer; margin: 10px 10px 0 0; }
+            button:hover 
+                { background: #666; }
+            input[type=text], input[type=number] 
+                { padding: 8px 10px; min-height: 44px; }
+            label, span.label
+                { margin-bottom: 5px; font-weight: 600; }
+            textarea 
+                { width: 100%; padding: 20px; box-sizing: border-box; height: 200px; resize: vertical; }
+            span.label 
+                { display: inline-block; width: 160px; font-weight: bold; text-align: right; margin-right: 10px; }
+            .debt span.label
+                { width: unset; }
+            td 
+                { width: 100px; }
+            tr td:first-of-type 
+                { width: 140px; }
+            .table-container 
+                { overflow-x: auto; border: 1px solid #666; border-radius: 10px; background: #f7f7f7; }
+            .flex 
+                { display: flex; gap: 20px; flex-wrap: nowrap; }
+            .flex div 
+                { flex-basis: 30%; flex-grow: 1; border: 1px solid #666; padding: 20px; border-radius: 5px; background: #f7f7f7; display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 20px; }
+            .flex div h3, .flex div p, .flex div h2 
+                { flex-basis: 100%; margin: 0; }
+            .flex div button 
+                { flex-basis: 40%; flex-grow: 1; margin: 0; }
+            .flex button 
+                { max-height: 44px; align-self: end; }
+            a.skip 
+                { padding: 40px; background: #f7f7f7; font-size: 24px; display: block; border: 1px solid #111; position: absolute; top: 30px; left: -200%; transform: translateX(-50%); }
+            a.skip:focus 
+                { left: 50%; }
+
+            @media screen and (max-width: 900px) {
+                .flex 
+                    { flex-wrap: wrap; }
+                .flex div 
+                    { flex-basis: 100%; }
+            }
+        </style>
+
+        <title>Debt repayment calculator</title>
+    </head>
+    <body>
+        <a class="skip" href="#debtslist">Skip to debts</a>
+        <a class="skip" href="#resultssection">Skip to results</a>
+        <a class="skip" href="#savesection">Skip to save</a>
+        <a class="skip" href="#instructions">Skip to instructions</a>
+        <div id="debt-row">
+            <div class="debt">
+                <div>
+                    <span class="label">Name</span>
+                    <input type="text"
+                           class="name" 
+                           name="name[]" 
+                           value="" 
+                           aria-label="Debt name" />
+                </div>
+                <div>
+                    <span class="label">Balance</span>
+                    <input type="number" 
+                           name="balance[]" 
+                           class="balance" 
+                           step=".01" 
+                           value="0.00" 
+                           aria-label="Debt balance" />
+                </div>
+                <div>
+                    <span class="label">APR</span>
+                    <input type="number" 
+                           name="apr[]" 
+                           class="apr" 
+                           step=".01" 
+                           value="0.00" 
+                           aria-label="Debt APR" />
+                </div>
+                <div>
+                    <span class="label">Minimum Payment</span>
+                    <input type="number" 
+                           name="min_payment[]" 
+                           class="min_payment" 
+                           step=".01" 
+                           value="0.00" 
+                           aria-label="Debt minimum payment" />
+                </div>
+                <div>
+                    <button class="remove-row">Remove</button>
+                </div>
+            </div>
+        </div>
+
+        <h1>Debt repayment calculator</h1>
+        <h2 id="debtslist">Debts</h2>
+
+        <div id="debts">
+
+        </div>
+
+        <button id="add-debt">Add Debt</button>
+
+        <hr>
+
+        <label for="monthly-payment">How much can I pay per month</label>
+        <input type="number" id="monthly-payment" step=".01" />
+
+        <hr>
+
+        <button id="calculate">Calculate</button>
+        <button id="demo">Demo</button>
+
+        <hr>
+        
+        <h2 id="resultssection">Results</h2>
+        <div id="results"></div>
+
+        <hr>
+
+        <h2 id="savesection">Save</h2>
+
+        <div class="flex">
+            <div>
+                <h3>Save object as text</h3>
+                <p>This creates an array of your data which you can store locally on your device, you can restore your data by re-loading this array into the debt calculator</p>
+                <button id="save">Create a save file</button>
+                <button id="load">Load a save file</button>
+            </div>
+            <div>
+                <h3>Save your data to your browser</h3>
+                <p>This is a convenient way to save your data, an array of your data is stored within your web browser. Clearing your cache will remove this data. Your data will only be saved for your current device and will not be accessible on our servers.</p>
+                <button id="saveBrowser">Save to browser</button>
+                <button id="clearBrowser">Clear save from browser</button>
+            </div>
+        </div>
+
+        <hr>
+
+        <h2 id="instructions">Instructions</h2>
+
+        <div class="flex">
+            <div>
+                <h3>How to use the debt calculator</h3>
+                <ol>
+                    <li>Add all of your debts including:
+                        <ol>
+                            <li>The name of the debt</li>
+                            <li>The balance of the debt</li>
+                            <li>The APR of the debt</li>
+                            <li>The minimum payment of the debt</li>
+                        </ol>
+                    </li>
+                    <li>Click "Calculate" to build a repayment plan</li>
+                    <li>Save your results, either locally or in your browser for future use</li>
+                </ol>
+                <h3>Terms &amp; conditions</h3>
+                <p>The debt calculator is a stand-alone application in a single file. It has no communication back to the server and as such none of your details are stored on the server. Save methods are either offline, or within your browser.</p>
+                <p>You can use the debt calculator online, or you can save the page as a HTML file and open this file to run it locally on your computer.</p>
+                <p>The plan built by the debt calculator must be checked over as it may not necessarily create the best plan. If you have found a bug, or miss calculation, please <a href="https://f13.dev/contact/">contact me</a>.</p>
+                <p>If you are unable to make your minimum payment, please seek <a href="https://www.gov.uk/options-for-dealing-with-your-debts">professional help</a>. With careful consideration, unmanageable debts can be dealt with.</p>
+            </div>
+        </div>
+    </body>
+</html>
