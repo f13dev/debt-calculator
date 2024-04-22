@@ -15,4 +15,5 @@ Either upload ```index.html``` to your web server or visit
 
 ## Found an issue
 
-Either create an issue on GitHub, or if you are not a GitHub member, please [contact me](https://f13.dev/contact/).
+Either create an issue on GitHub, or if you are not a GitHub member, please [contact me
+](https://f13.dev/contact/).
